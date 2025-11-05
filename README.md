@@ -24,39 +24,34 @@ This package is registered and can be added using the Julia package manager.
 
 2. Install the package from the Julia Pkg REPL:
 
-    ```
-    $ julia
-    julia> ]
-    pkg> add SpectralUnmixing
-    ```
+        $ julia
+        julia> ]
+        pkg> add SpectralUnmixing
 
     or equivalently from the command line,
 
-    ```
-    $ julia 'using Pkg; Pkg.add("SpectralUnmixing")'
-    ```
+        $ julia 'using Pkg; Pkg.add("SpectralUnmixing")'
 
     Remember to activate the appropriate [environment](https://pkgdocs.julialang.org/v1/) via the Pkg REPL, or by using the `--project` flag or setting the `JULIA_PROJECT` environment variable.
 
-3. Install the CLI script to your Julia depot:
+3. Install the CLI script to your Julia depot, typically `~/.julia/bin`:
 
-    ```
-    julia> using SpectralUnmixing
-    julia> CLI.install()
-    ```
-    Add the depot bin directory to your PATH to easily access the `unmix.jl` CLI script.
+        julia> using SpectralUnmixing
+        julia> CLI.install()
 
-### Method 2: Local install
+    This creates a symlink to the `unmix.jl` CLI script in an easily accessible location.
+
+### Method 2: Git Install
 
 If you would like to install a local version of the repository, first clone a local copy and navigate into the base SpectralUnmixing directory.  Then run:
-```
-$ julia --project='.' -e 'using Pkg; Pkg.activate(".");'
-$ export JULIA_PROJECT=${PWD}
-```
-The CLI script can be called from the base directory.
+
+    $ julia --project='.' -e 'using Pkg; Pkg.activate(".");'
+    $ export JULIA_PROJECT=${PWD}
+
+The CLI script `unmix.jl` can be called directly from the SpectralUnmixing directory.
 
 ## Using the CLI script
-Currently the package supports reading and writing ENVI raster data.
+Currently the package supports reading and writing ENVI raster data. Replace `unmix.jl` below with the path to the script based on your installation method as necessary.
 
 Basic:
 

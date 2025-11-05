@@ -24,8 +24,11 @@ function install(; dest_dir::String=joinpath(DEPOT_PATH[1], "bin"),
         rm(dest)
     end
     symlink(src, dest)
-    println("Symlink created at $dest")
-    println("If not already, add $(dest_dir) to your PATH to use unmix.jl from the command line.")
+    println("Symlink created at $dest -> $src")
+    println("To run unmix.jl from the command line do:")
+    println("#")
+    println("#    julia $dest -h")
+    println("#")
 end
 
 end # module
