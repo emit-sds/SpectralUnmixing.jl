@@ -52,6 +52,9 @@ In essence, this reduces to a simple linear algebra inversion where the known re
 However, details arise regarding the nature of the selection of endmembers, with strategies ranging from dimensionality reduction of endmember 'classes' [@roberts1998mapping], bootstrapping [@asner2000biogeophysical], combinatorial selection [@roberts1998mapping; @franke2009hierarchical], and spectral brightness normalization [@asner2000biogeophysical].
 The exact matrix inversion strategy to use is also an open and problem-specific decision, with candidates ranging from direct algebraic inversion to a constrained and regularized optimization [@hastie2015statistical].
 
+`SpectralUnmixing` is a Julia package that brings together a wide variety of these unmixing strategies into a single, flexible, codebase that operates efficiently in order to support real deployment. Designed as a package, users have the option to 
+experiment with individual functions, use a front-end script to deploy a fractional cover retrieval of choice over a given image, or to build out a new unmixing strategy leveraging the core functions and inversion methods established here.
+
 # Statement of need
 
 `SpectralUnmixing` is a one-stop-shop Julia package for all types of spectral unmixing strategies, focused on imaging spectroscopy data.
