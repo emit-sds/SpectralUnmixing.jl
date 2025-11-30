@@ -43,16 +43,16 @@ bibliography: paper.bib
 
 On the Earth's surface, mixtures are the norm rather than the exception.
 Taken to the limit, virtually every surface can be split into multiple constituents.
-Spectral unmixing is the remote sensing retrieval process that attempts to quantitatively determine the relative fractions of various components that make up a surface based on optical data.
+Spectral unmixing is the retrieval process that attempts to quantitatively determine the relative fractions of various components that make up a surface based on remotely-sensed optical data.
 Imaging spectroscopy, in particular, has demonstrated the capacity for robust fractional retrievals across a wide range of domains, including mineralogical maps [@yan2010minerals; @combe2008analysis], urban land cover [@myint2009modelling], and vegetation [@okin2001practical].
 
 Spectral unmixing is typically performed under the assumption of linear mixtures.
 Some set of candidate 'endmembers' - constituents with known absolute (often pure) quantities and spectral signatures - are provided, and each pixel within an image is linearly unmixed with these endmembers to retrieve the relative contribution of each constituent.
-In essence, this reduces to a simple linear algebra inversion where the known reference library can be inverted and multiplied by the observed reflectances to produce mixture fractions.
+In essence, this reduces to a simple linear algebra inversion where the known reference library can be inverted and multiplied by the target signatures to produce mixture fractions.  This routine is commonly performed on reflectance spectra, but can also be applied to radiance data with appropriate consideration of atmospheric and illumination / topographic effects.
 However, details arise regarding the nature of the selection of endmembers, with strategies ranging from dimensionality reduction of endmember 'classes' [@roberts1998mapping], bootstrapping [@asner2000biogeophysical], combinatorial selection [@roberts1998mapping; @franke2009hierarchical], and spectral brightness normalization [@asner2000biogeophysical].
 The exact matrix inversion strategy to use is also an open and problem-specific decision, with candidates ranging from direct algebraic inversion to a constrained and regularized optimization [@hastie2015statistical].
 
-`SpectralUnmixing` is a Julia package that brings together a wide variety of these unmixing strategies into a single, flexible, codebase that operates efficiently in order to support real deployment. Designed as a package, users have the option to 
+`SpectralUnmixing` is a Julia package that brings together a wide variety of these unmixing strategies into a single, flexible codebase that operates efficiently in order to support real deployment. Designed as a package, users have the option to 
 experiment with individual functions, use a front-end script to deploy a fractional cover retrieval of choice over a given image, or to build out a new unmixing strategy leveraging the core functions and inversion methods established here.
 
 # Statement of need
@@ -61,7 +61,7 @@ experiment with individual functions, use a front-end script to deploy a fractio
 The code was designed for NASA's Earth Surface Mineral Dust Source Investigation (EMIT) [@emit2020] mission when, during the algorithm design phase, it became evident that there did not yet exist an optimized codebase that provided parallelized and flexible spectral unmixing strategies.
 In particular, no central framework exists in which different unmixing strategies could be efficiently tested against one another.
 `SpectralUnmixing` addresses this issue by drawing on a vast amount of existing literature and bringing the various proposed strategies together into a single codebase.
-The framework also leverages a rich set of Julia packages for linear algebra, optimization, remote sensing data IO and more, resulting in a highly flexible and scalable unmixing package.
+The framework also leverages a rich set of Julia packages for linear algebra, optimization, data IO and more, resulting in a highly flexible and scalable unmixing package.
 `SpectralUnmixing` has already supported the development of new unmixing strategies by accelerating the process of combining different components of the overall unmixing problem in novel ways [@OchoaQuantifying]
 The package's scalability and breadth will allow it to continue providing this kind of coupled flexibility and operational capacity into the future.
 
