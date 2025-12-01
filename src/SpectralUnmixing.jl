@@ -25,6 +25,7 @@ using Printf
 using LinearAlgebra
 using Combinatorics
 using Random
+using StableRNGs
 
 include("CLI.jl")
 include("Datasets.jl")
@@ -135,7 +136,9 @@ is a set of indices corresponding to endmembers belonging to one class.
 - A vector of integers representing the permuted endmember indices.
 """
 function get_sma_permutation(class_idx, num_endmembers::Vector{Int64},
-    combination_type::String, library_length::Int64)
+    combination_type::String, library_length::Int64, seed::Int64)
+
+    rng = StableRNG(seed)
 
     if length(num_endmembers) != 1
         throw(ArgumentError("num_endmembers must be a single value"))
@@ -146,7 +149,8 @@ function get_sma_permutation(class_idx, num_endmembers::Vector{Int64},
 
             perm_class_idx = []
             for class_subset in class_idx
-                push!(perm_class_idx, Random.shuffle(class_subset))
+                push!(perm_class_idx, shuffle(rng, class_subset))
+                #push!(perm_class_idx, Random.shuffle(class_subset))
             end
 
             perm = []
@@ -271,7 +275,8 @@ function unmix_pixel(library::SpectralLibrary, img_dat_input::Array{Float64}, un
     mc_comp_frac = zeros(n_mc, size(library.spectra)[1] + 1)
     scores = zeros(n_mc)
     for mc in 1:n_mc #monte carlo loop
-        Random.seed!(mc)
+        rng = StableRNG(mc)
+        #Random.seed!(mc)
 
         d = img_dat
         if isnothing(unc_dat) == false
@@ -288,8 +293,7 @@ function unmix_pixel(library::SpectralLibrary, img_dat_input::Array{Float64}, un
 
         if mode == "sma" || mode == "sma-best"
             perm = get_sma_permutation(
-                class_idx, num_endmembers, combination_type, size(library.spectra)[1]
-            )
+                class_idx, num_endmembers, combination_type, size(library.spectra)[1], mc)
             G = library.spectra[perm, library.good_bands]
 
             G = scale_data(G, library.wavelengths[library.good_bands], normalization)'
@@ -478,7 +482,8 @@ function unmix_line(line::Int64, reflectance_file::String, mode::String,
     combination_type::String="all", num_endmembers::Vector{Int64}=[2, 3],
     max_combinations::Int64=-1, optimization="bvls")
 
-    Random.seed!(13)
+    #Random.seed!(13)
+    rng = StableRNG(13)
 
     img_dat, unc_dat, good_data = load_line(
         reflectance_file, reflectance_uncertainty_file, line, library.good_bands,
@@ -599,7 +604,8 @@ endmembers (e.g., "all" or "class-even").
 function simulate_pixel(library::SpectralLibrary, max_components::Int64,
     combination_type::String, seed::Int64)
 
-    Random.seed!(seed)
+    #Random.seed!(seed)
+    rng = StableRNG(seed)
 
     output_mixture = zeros(size(library.spectra)[2])
     output_mixture[:] .= NaN
