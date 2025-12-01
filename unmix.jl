@@ -154,7 +154,7 @@ function main()
     if args["mode"] == "sma" && length(args["num_endmembers"]) != 1
         throw(ArgumentError("num_endmembers must be a single value for SMA mode"))
     elseif args["mode"] == "mesma" && length(args["num_endmembers"]) == 1
-        Warn("only using one value for num_endmembers in mesma mode")
+        @warn "only using one value for num_endmembers in mesma mode"
     end
 
 
