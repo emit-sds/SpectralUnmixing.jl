@@ -612,7 +612,7 @@ function simulate_pixel(library::SpectralLibrary, max_components::Int64,
 
     class_idx = prepare_combinations(library, combination_type)
     perm = get_sma_permutation(
-        class_idx, [max_components], combination_type, size(library.spectra)[1]
+        class_idx, [max_components], combination_type, size(library.spectra)[1], seed
     )
 
     G = library.spectra[perm, :]
