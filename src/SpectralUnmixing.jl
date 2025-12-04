@@ -26,6 +26,7 @@ using LinearAlgebra
 using Combinatorics
 using Random
 using StableRNGs
+using DelimitedFiles
 
 include("CLI.jl")
 include("Datasets.jl")
@@ -138,7 +139,7 @@ is a set of indices corresponding to endmembers belonging to one class.
 function get_sma_permutation(class_idx, num_endmembers::Vector{Int64},
     combination_type::String, library_length::Int64, seed::Int64)
 
-    rng = StableRNG(seed)
+    #rng = StableRNG(seed)
 
     if length(num_endmembers) != 1
         throw(ArgumentError("num_endmembers must be a single value"))
@@ -149,8 +150,8 @@ function get_sma_permutation(class_idx, num_endmembers::Vector{Int64},
 
             perm_class_idx = []
             for class_subset in class_idx
-                push!(perm_class_idx, shuffle(rng, class_subset))
-                #push!(perm_class_idx, Random.shuffle(class_subset))
+                #push!(perm_class_idx, shuffle(rng, class_subset))
+                push!(perm_class_idx, Random.shuffle(class_subset))
             end
 
             perm = []
@@ -275,8 +276,9 @@ function unmix_pixel(library::SpectralLibrary, img_dat_input::Array{Float64}, un
     mc_comp_frac = zeros(n_mc, size(library.spectra)[1] + 1)
     scores = zeros(n_mc)
     for mc in 1:n_mc #monte carlo loop
-        rng = StableRNG(mc)
-        #Random.seed!(StableRNG(mc), mc)
+        #rng = StableRNG(mc)
+        Random.seed!(StableRNG(mc), mc)
+        #Random.seed!(mc)
 
         d = img_dat
         if isnothing(unc_dat) == false
@@ -367,6 +369,7 @@ function unmix_pixel(library::SpectralLibrary, img_dat_input::Array{Float64}, un
     mc_comp_frac[mc_comp_frac.<0] .= 0
     mc_comp_frac[:, end] = sum(mc_comp_frac, dims=2)
     mc_comp_frac[:, 1:end-1] = mc_comp_frac[:, 1:end-1] ./ mc_comp_frac[:, end]
+    writedlm("mc_fractions_1000_default.csv", mc_comp_frac, ',')
 
     # Aggregate results from per-library to per-unique-class
     mixture_results = zeros(size(mc_comp_frac)[1], length(library.class_valid_keys) + 1)
