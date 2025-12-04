@@ -276,7 +276,7 @@ function unmix_pixel(library::SpectralLibrary, img_dat_input::Array{Float64}, un
     scores = zeros(n_mc)
     for mc in 1:n_mc #monte carlo loop
         rng = StableRNG(mc)
-        #Random.seed!(mc)
+        #Random.seed!(StableRNG(mc), mc)
 
         d = img_dat
         if isnothing(unc_dat) == false
