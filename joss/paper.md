@@ -31,9 +31,9 @@ authors:
     orcid: 0000-0001-9447-3076
     affiliation: "1"
 affiliations:
- - name: Jet Propulsion Laboratory, California Institute of Technology, USA
+ - name: Jet Propulsion Laboratory, California Institute of Technology, United States of America
    index: 1
- - name: University of California, Los Angeles, USA
+ - name: University of California, Los Angeles, United States of America
    index: 2
 date: 15 July 2022
 bibliography: paper.bib
