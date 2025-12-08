@@ -366,7 +366,6 @@ function unmix_pixel(library::SpectralLibrary, img_dat_input::Array{Float64}, un
     mc_comp_frac[mc_comp_frac.<0] .= 0
     mc_comp_frac[:, end] = sum(mc_comp_frac, dims=2)
     mc_comp_frac[:, 1:end-1] = mc_comp_frac[:, 1:end-1] ./ mc_comp_frac[:, end]
-    writedlm("mc_fractions_1000_default.csv", mc_comp_frac, ',')
 
     # Aggregate results from per-library to per-unique-class
     mixture_results = zeros(size(mc_comp_frac)[1], length(library.class_valid_keys) + 1)
