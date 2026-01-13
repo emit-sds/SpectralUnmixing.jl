@@ -373,7 +373,7 @@ function brightness_normalize!(library::SpectralLibrary)
 end
 
 """
-    split_library(library::SpectralLibrary, split_fraction::Float64, seed::Int64=13)
+    split_library(library::SpectralLibrary, split_fraction::Float64, seed::Int64=Nothing)
 
 Split a `SpectralLibrary` into two new libraries based on a specified fraction of the
 total spectra.
