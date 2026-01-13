@@ -24,6 +24,7 @@ using ModularIndices
 using NMF
 using MultivariateStats
 using Clustering
+using StableRNGs
 
 """
     nanargmin(input::Array)
@@ -372,7 +373,7 @@ function brightness_normalize!(library::SpectralLibrary)
 end
 
 """
-    split_library(library::SpectralLibrary, split_fraction::Float64)
+    split_library(library::SpectralLibrary, split_fraction::Float64, seed::Int64=13)
 
 Split a `SpectralLibrary` into two new libraries based on a specified fraction of the
 total spectra.
@@ -386,12 +387,18 @@ split_fraction` of the spectra, respectively.
 - The split is random; consecutive calls with the same `library` may yield different
 results.
 """
-function split_library(library::SpectralLibrary, split_fraction::Float64)
+function split_library(library::SpectralLibrary, split_fraction::Float64, seed::Int64=Nothing)
 
     if !(0 < split_fraction < 1)
         throw(ArgumentError("split_fraction must be between 0 and 1 (exclusive)."))
     end
-    perm = randperm(size(library.spectra)[1])
+    if isnothing(seed)
+        perm = randperm(size(library.spectra)[1])
+    else
+        rng = StableRNG(seed)
+        perm = randperm(rng, size(library.spectra)[1])
+    end
+
 
     split_1 = perm[1:Int(round(split_fraction * length(perm)))]
     split_2 = perm[Int(round(split_fraction * length(perm))):end]

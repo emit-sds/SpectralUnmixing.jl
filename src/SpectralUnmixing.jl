@@ -25,6 +25,7 @@ using Printf
 using LinearAlgebra
 using Combinatorics
 using Random
+using StableRNGs
 
 include("CLI.jl")
 include("Datasets.jl")
@@ -130,12 +131,13 @@ is a set of indices corresponding to endmembers belonging to one class.
   of endmembers is selected.
   - Any other types: Randomly selects endmembers from the entire library.
 - `library_length::Int64`: Size of the entire endmember library.
+- `rng::AbstractRNG=StableRNG(0)`: Random number generator for reproducibility.
 
 # Returns
 - A vector of integers representing the permuted endmember indices.
 """
 function get_sma_permutation(class_idx, num_endmembers::Vector{Int64},
-    combination_type::String, library_length::Int64)
+    combination_type::String, library_length::Int64, rng::AbstractRNG=StableRNG(0))
 
     if length(num_endmembers) != 1
         throw(ArgumentError("num_endmembers must be a single value"))
@@ -146,7 +148,7 @@ function get_sma_permutation(class_idx, num_endmembers::Vector{Int64},
 
             perm_class_idx = []
             for class_subset in class_idx
-                push!(perm_class_idx, Random.shuffle(class_subset))
+                push!(perm_class_idx, Random.shuffle(rng,class_subset))
             end
 
             perm = []
@@ -163,7 +165,7 @@ function get_sma_permutation(class_idx, num_endmembers::Vector{Int64},
             end
 
         else
-            perm = randperm(library_length)[1:num_endmembers[1]]
+            perm = randperm(rng, library_length)[1:num_endmembers[1]]
         end
     else
         perm = convert(Vector{Int64}, 1:library_length)
@@ -271,11 +273,11 @@ function unmix_pixel(library::SpectralLibrary, img_dat_input::Array{Float64}, un
     mc_comp_frac = zeros(n_mc, size(library.spectra)[1] + 1)
     scores = zeros(n_mc)
     for mc in 1:n_mc #monte carlo loop
-        Random.seed!(mc)
+        rng = StableRNG(mc)
 
         d = img_dat
         if isnothing(unc_dat) == false
-            d += (rand(size(d)...) .* 2 .- 1) .* unc_dat
+            d += (rand(rng, size(d)...) .* 2 .- 1) .* unc_dat
         end
 
         if occursin("pinv", optimization)
@@ -317,7 +319,7 @@ function unmix_pixel(library::SpectralLibrary, img_dat_input::Array{Float64}, un
             solutions = []
             costs = zeros(size(options)[1]) .+ 1e12
             if max_combinations != -1 && length(options) > max_combinations
-                perm = randperm(length(options))[1:max_combinations]
+                perm = randperm(rng, length(options))[1:max_combinations]
             else
                 perm = convert(Vector{Int64}, 1:length(options))
             end
@@ -468,7 +470,6 @@ limit.
   - Complete fractions for each endmember in the unmixing of each pixel.
 
 # Notes
-- Initializes a random seed for reproducibility.
 - Logs the execution time for unmixing a line.
 - Returns `nothing` if input data is invalid or missing.
 """
@@ -477,8 +478,6 @@ function unmix_line(line::Int64, reflectance_file::String, mode::String,
     library::SpectralLibrary, reflectance_uncertainty_file::String="", n_mc::Int64=1,
     combination_type::String="all", num_endmembers::Vector{Int64}=[2, 3],
     max_combinations::Int64=-1, optimization="bvls")
-
-    Random.seed!(13)
 
     img_dat, unc_dat, good_data = load_line(
         reflectance_file, reflectance_uncertainty_file, line, library.good_bands,
@@ -599,19 +598,19 @@ endmembers (e.g., "all" or "class-even").
 function simulate_pixel(library::SpectralLibrary, max_components::Int64,
     combination_type::String, seed::Int64)
 
-    Random.seed!(seed)
+    rng = StableRNG(seed)
 
     output_mixture = zeros(size(library.spectra)[2])
     output_mixture[:] .= NaN
 
     class_idx = prepare_combinations(library, combination_type)
     perm = get_sma_permutation(
-        class_idx, [max_components], combination_type, size(library.spectra)[1]
+        class_idx, [max_components], combination_type, size(library.spectra)[1], rng
     )
 
     G = library.spectra[perm, :]
 
-    distribution = rand(max_components)
+    distribution = rand(rng, max_components)
     distribution = distribution ./ sum(distribution)
 
     output_distribution = zeros(size(library.spectra)[1])
