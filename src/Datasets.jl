@@ -31,10 +31,18 @@ raster dataset. The length of this vector must match the number of bands in the 
 function set_band_names(filename::String, band_names::Vector)
     GC.gc()
     local_ods = GDAL.gdalopen(filename, GDAL.GA_Update)
-    for _b in 1:(length(band_names))
-        GDAL.gdalsetdescription(GDAL.gdalgetrasterband(local_ods, _b), band_names[_b])
+    
+    try
+        for _b in 1:length(band_names)
+            band = GDAL.gdalgetrasterband(local_ods, _b)
+            GDAL.gdalsetdescription(band, band_names[_b])
+        end
+    finally
+        # Properly close the dataset
+        GDAL.gdalclose(local_ods)
     end
-    local_ods = nothing
+    
+    GC.gc()
 end
 
 """
