@@ -328,12 +328,30 @@ function _unmix_pixel_kernel(library::SpectralLibrary, img_dat::Matrix{Float64},
 
     mc_comp_frac = zeros(n_mc, size(library.spectra)[1] + 1)
     scores = zeros(n_mc)
+
+    # Pre-allocate buffers to reuse across MC iterations
+    d_buffer = similar(img_dat)  # Reusable buffer for perturbed data
+    n_bands = sum(library.good_bands)
+    max_perm_size = if mode == "sma" || mode == "sma-best"
+        num_endmembers[1] == -1 ? size(library.spectra)[1] : num_endmembers[1]
+    else
+        maximum(length, options)
+    end
+
+    # Pre-allocate bounds arrays for BVLS (reused across MC iterations)
+    lb_bounds = zeros(Float64, max_perm_size)
+    ub_bounds = ones(Float64, max_perm_size)
+
     for mc in 1:n_mc #monte carlo loop
         rng = StableRNG(mc)
 
-        d = img_dat
+        # Reuse buffer instead of allocating new array
         if !isnothing(unc_dat)
-            d = d .+ (rand(rng, size(d)...) .* 2 .- 1) .* unc_dat
+            # In-place perturbation
+            d_buffer .= img_dat .+ (rand(rng, size(img_dat)...) .* 2 .- 1) .* unc_dat
+            d = d_buffer
+        else
+            d = img_dat
         end
 
         if occursin("pinv", optimization)
@@ -360,9 +378,13 @@ function _unmix_pixel_kernel(library::SpectralLibrary, img_dat::Matrix{Float64},
             cost::Float64 = 0.0
 
             if occursin("bvls", optimization)
+                # Use pre-allocated bounds (view to match size)
+                n_vars = length(x0)
                 res, cost = bvls(
-                    G, d[:], x0, zeros(size(x0)), ones(size(x0)), 1e-3, 100, 1,
-                    inverse_method
+                    G, d[:], x0,
+                    view(lb_bounds, 1:n_vars),
+                    view(ub_bounds, 1:n_vars),
+                    1e-3, 100, 1, inverse_method
                 )
             elseif occursin("ldsqp", optimization)
                 res, cost = opt_solve(G, d[:], x0, zeros(length(x0)), ones(length(x0)))
@@ -402,9 +424,13 @@ function _unmix_pixel_kernel(library::SpectralLibrary, img_dat::Matrix{Float64},
                 lc::Float64 = 0.0
 
                 if optimization == "bvls"
+                    # Use pre-allocated bounds
+                    n_vars = length(x0)
                     ls, lc = bvls(
-                        G, d[:], x0, zeros(size(x0)), ones(size(x0)), 1e-3, 10, 1,
-                        inverse_method
+                        G, d[:], x0,
+                        view(lb_bounds, 1:n_vars),
+                        view(ub_bounds, 1:n_vars),
+                        1e-3, 10, 1, inverse_method
                     )
                     costs[_comb] = lc
                 elseif optimization == "ldsqp"
