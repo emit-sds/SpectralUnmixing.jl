@@ -51,6 +51,26 @@ export unmix_line, unmix_pixel, simulate_pixel, unmix_and_write_line
 export CLI
 
 """
+    ensure_2d(x::AbstractVector{Float64})
+
+Convert a 1D vector to a 2D matrix (1×n) for type-stable processing.
+This function is marked inline for zero-cost abstraction.
+"""
+@inline function ensure_2d(x::AbstractVector{Float64})::Matrix{Float64}
+    reshape(collect(x), 1, length(x))
+end
+
+"""
+    ensure_2d(x::AbstractMatrix{Float64})
+
+Convert abstract matrix to concrete Matrix for type-stable processing.
+Marked inline for zero-cost abstraction when input is already a Matrix.
+"""
+@inline function ensure_2d(x::AbstractMatrix{Float64})::Matrix{Float64}
+    x isa Matrix{Float64} ? x : Matrix{Float64}(x)
+end
+
+"""
     wl_index(wavelengths::Vector{Float64}, target::Float64)
 
 Return the index of the wavelength in a vector that is closest to the specified target
@@ -84,7 +104,7 @@ ignore.
 - A matrix of scaled reflectance data with same dimensions as `refl`.
 """
 function scale_data(refl::Matrix{Float64}, wavelengths::Vector{Float64}, criteria::String,
-    bad_regions_wl=[[1300, 1500], [1800, 2000]])
+    bad_regions_wl=[[1300, 1500], [1800, 2000]])::Matrix{Float64}
 
     if criteria == "none"
         return refl
@@ -93,18 +113,18 @@ function scale_data(refl::Matrix{Float64}, wavelengths::Vector{Float64}, criteri
         for br in bad_regions_wl
             good_bands[wl_index(wavelengths, br[1]):wl_index(wavelengths, br[2])] .= false
         end
-        if length(size(refl)) == 2
-            norm = sqrt.(mean(refl[:, good_bands] .^ 2, dims=2))
+        norm = if length(size(refl)) == 2
+            sqrt.(mean(refl[:, good_bands] .^ 2, dims=2))
         else
-            norm = sqrt.(mean(refl[good_bands] .^ 2))
+            sqrt.(mean(refl[good_bands] .^ 2))
         end
     else
         try
             target_wl = parse(Float64, criteria)
-            if length(size(refl)) == 2
-                norm = refl[:, wl_index(wavelengths, target_wl)] ./ 0.5
+            norm = if length(size(refl)) == 2
+                refl[:, wl_index(wavelengths, target_wl)] ./ 0.5
             else
-                norm = refl[wl_index(wavelengths, target_wl)] ./ 0.5
+                refl[wl_index(wavelengths, target_wl)] ./ 0.5
             end
         catch e
             throw(ArgumentError(string("normalization must be [none, brightness, or a
@@ -137,25 +157,26 @@ is a set of indices corresponding to endmembers belonging to one class.
 - A vector of integers representing the permuted endmember indices.
 """
 function get_sma_permutation(class_idx, num_endmembers::Vector{Int64},
-    combination_type::String, library_length::Int64, rng::AbstractRNG=StableRNG(0))
+    combination_type::String, library_length::Int64,
+    rng::AbstractRNG=StableRNG(0))::Vector{Int64}
 
     if length(num_endmembers) != 1
         throw(ArgumentError("num_endmembers must be a single value"))
     end
 
-    if num_endmembers[1] != -1
+    perm::Vector{Int64} = if num_endmembers[1] != -1
         if combination_type == "class-even"
-
-            perm_class_idx = []
+            # Pre-allocate with type
+            perm_class_idx = Vector{Vector{Int64}}()
             for class_subset in class_idx
-                push!(perm_class_idx, Random.shuffle(rng,class_subset))
+                push!(perm_class_idx, Random.shuffle(rng, class_subset))
             end
 
-            perm = []
+            perm_local = Vector{Int64}()
             selector = 1
             while selector <= num_endmembers[1]
                 _p = mod(selector, length(perm_class_idx)) + 1
-                push!(perm, perm_class_idx[_p][1])
+                push!(perm_local, perm_class_idx[_p][1])
                 deleteat!(perm_class_idx[_p], 1)
 
                 if length(perm_class_idx[_p]) == 0
@@ -163,12 +184,12 @@ function get_sma_permutation(class_idx, num_endmembers::Vector{Int64},
                 end
                 selector += 1
             end
-
+            perm_local
         else
-            perm = randperm(rng, library_length)[1:num_endmembers[1]]
+            randperm(rng, library_length)[1:num_endmembers[1]]
         end
     else
-        perm = convert(Vector{Int64}, 1:library_length)
+        collect(1:library_length)
     end
 
     return perm
@@ -195,19 +216,20 @@ with each simulation, used to determine the best result when applicable.
   - `output_var::Vector{Float64}`: Standard deviation of the results for each variable, or
   `nothing` if there is only one simulation.
 """
-function results_from_mc(results::Matrix{Float64}, cost::Vector{Float64}, mode::String)
+function results_from_mc(results::Matrix{Float64}, cost::Vector{Float64},
+                         mode::String)::Tuple{Vector{Float64}, Union{Nothing, Vector{Float64}}}
 
-    if size(results)[1] == 1
-        output_var = nothing
+    output_var::Union{Nothing, Vector{Float64}} = if size(results, 1) == 1
+        nothing
     else
-        output_var = std(results, dims=1)[1, :]
+        std(results, dims=1)[1, :]
     end
 
-    if occursin("best", mode)
+    output::Vector{Float64} = if occursin("best", mode)
         best_idx = argmin(cost)
-        output = results[best_idx, :]
+        results[best_idx, :]
     else
-        output = mean(results, dims=1)[1, :]
+        mean(results, dims=1)[1, :]
     end
 
     return output, output_var
@@ -221,6 +243,9 @@ end
 
 Unmix a pixel's spectral data using a given spectral library with options for SMA or MESMA
 and various Monte Carlo and optimization approaches.
+
+This is a wrapper function that ensures type stability by normalizing inputs before calling
+the type-stable kernel [`_unmix_pixel_kernel`](@ref).
 
 # Arguments
 - `library::SpectralLibrary`: Endmember library for unmixing.
@@ -252,23 +277,54 @@ inverse method, if applicable.
 - A tuple containing:
   - `output_mixture::Vector{Float64}`: The estimated fraction of each class in the
   `library`, appended with the brightness.
-  - `output_mixture_var::Vector{Float64}`: The variance of each class in the `library`,
+  - `output_mixture_var::Union{Nothing, Vector{Float64}}`: The variance of each class in the `library`,
   appended with the brightness variance.
   - `output_comp_frac::Vector{Float64}`: The estimated fraction of each endmember in the
   `library`, appended with the brightness.
-  - `output_comp_frac_var::Vector{Float64}`: The variance of each endmember in the
+  - `output_comp_frac_var::Union{Nothing, Vector{Float64}}`: The variance of each endmember in the
   `library`, appended with the brightness variance.
 """
-function unmix_pixel(library::SpectralLibrary, img_dat_input::Array{Float64}, unc_dat,
+function unmix_pixel(library::SpectralLibrary, img_dat_input::AbstractArray{Float64}, unc_dat,
     class_idx, options, mode::String, n_mc::Int64, num_endmembers::Vector{Int64},
     normalization::String, optimization::String, max_combinations::Int64,
     combination_type::String)
 
-    if length(size(img_dat_input)) == 1
-        img_dat = reshape(img_dat_input, 1, length(img_dat_input))
+    # Type-stable conversion to 2D matrix
+    img_dat = ensure_2d(img_dat_input)
+
+    # Type-stable handling of uncertainty data
+    unc_dat_2d::Union{Nothing, Matrix{Float64}} = if isnothing(unc_dat)
+        nothing
     else
-        img_dat = img_dat_input
+        ensure_2d(unc_dat)
     end
+
+    # Call type-stable kernel
+    return _unmix_pixel_kernel(library, img_dat, unc_dat_2d, class_idx, options, mode,
+                               n_mc, num_endmembers, normalization, optimization,
+                               max_combinations, combination_type)
+end
+
+"""
+    _unmix_pixel_kernel(library::SpectralLibrary, img_dat::Matrix{Float64},
+                        unc_dat::Union{Nothing, Matrix{Float64}}, class_idx, options,
+                        mode::String, n_mc::Int64, num_endmembers::Vector{Int64},
+                        normalization::String, optimization::String,
+                        max_combinations::Int64, combination_type::String)
+
+Type-stable kernel for pixel unmixing. All inputs are guaranteed to have stable types.
+
+# Returns
+- A tuple containing:
+  - `output_mixture::Vector{Float64}`: The estimated fraction of each class
+  - `output_mixture_var::Union{Nothing, Vector{Float64}}`: The variance of each class
+  - `output_comp_frac::Vector{Float64}`: The estimated fraction of each endmember
+  - `output_comp_frac_var::Union{Nothing, Vector{Float64}}`: The variance of each endmember
+"""
+function _unmix_pixel_kernel(library::SpectralLibrary, img_dat::Matrix{Float64},
+    unc_dat::Union{Nothing, Matrix{Float64}}, class_idx, options, mode::String,
+    n_mc::Int64, num_endmembers::Vector{Int64}, normalization::String,
+    optimization::String, max_combinations::Int64, combination_type::String)
 
     mc_comp_frac = zeros(n_mc, size(library.spectra)[1] + 1)
     scores = zeros(n_mc)
@@ -276,8 +332,8 @@ function unmix_pixel(library::SpectralLibrary, img_dat_input::Array{Float64}, un
         rng = StableRNG(mc)
 
         d = img_dat
-        if isnothing(unc_dat) == false
-            d += (rand(rng, size(d)...) .* 2 .- 1) .* unc_dat
+        if !isnothing(unc_dat)
+            d = d .+ (rand(rng, size(d)...) .* 2 .- 1) .* unc_dat
         end
 
         if occursin("pinv", optimization)
@@ -299,7 +355,10 @@ function unmix_pixel(library::SpectralLibrary, img_dat_input::Array{Float64}, un
             x0 = dolsq(G, d', method=inverse_method)
 
             x0 = x0[:]
-            res = nothing
+            # Declare with explicit type to help compiler
+            res::Vector{Float64} = x0
+            cost::Float64 = 0.0
+
             if occursin("bvls", optimization)
                 res, cost = bvls(
                     G, d[:], x0, zeros(size(x0)), ones(size(x0)), 1e-3, 100, 1,
@@ -316,13 +375,17 @@ function unmix_pixel(library::SpectralLibrary, img_dat_input::Array{Float64}, un
             scores[mc] = cost
 
         elseif mode == "mesma" || mode == "mesma-best"
-            solutions = []
-            costs = zeros(size(options)[1]) .+ 1e12
+            # Determine the permutation of options to evaluate
             if max_combinations != -1 && length(options) > max_combinations
                 perm = randperm(rng, length(options))[1:max_combinations]
             else
                 perm = convert(Vector{Int64}, 1:length(options))
             end
+
+            # Pre-allocate with explicit type for type stability
+            n_combs = length(perm)
+            solutions = Vector{Vector{Float64}}(undef, n_combs)
+            costs = zeros(Float64, n_combs) .+ 1e12
 
             for (_comb, comb) in enumerate(options[perm])
                 comb = [c for c in comb]
@@ -333,7 +396,11 @@ function unmix_pixel(library::SpectralLibrary, img_dat_input::Array{Float64}, un
                 )'
                 x0 = dolsq(G, d')
                 x0 = x0[:]
-                ls = nothing
+
+                # Type-stable declaration
+                ls::Vector{Float64} = x0
+                lc::Float64 = 0.0
+
                 if optimization == "bvls"
                     ls, lc = bvls(
                         G, d[:], x0, zeros(size(x0)), ones(size(x0)), 1e-3, 10, 1,
@@ -346,13 +413,14 @@ function unmix_pixel(library::SpectralLibrary, img_dat_input::Array{Float64}, un
                 elseif optimization == "inverse"
                     ls = x0
                     r = G * x0 - d[:]
-                    costs[_comb] = dot(r, r)
+                    lc = dot(r, r)
+                    costs[_comb] = lc
                 end
-                push!(solutions, ls)
-
+                solutions[_comb] = ls
             end
+
             best = argmin(costs)
-            scores[mc] = best
+            scores[mc] = costs[best]
 
             mc_comp_frac[mc, [ind for ind in options[perm][best]]] = solutions[best]
 
@@ -487,20 +555,27 @@ function unmix_line(line::Int64, reflectance_file::String, mode::String,
         return line, nothing, good_data, nothing, nothing
     end
 
-    mixture_results = fill(-9999.0, sum(good_data), size(library.class_valid_keys)[1] + 1)
-    complete_fractions = zeros(size(img_dat)[1], size(library.spectra)[1] + 1)
+    n_pixels = size(img_dat, 1)
+    n_classes = size(library.class_valid_keys, 1)
+    n_endmembers = size(library.spectra, 1)
 
+    mixture_results = fill(-9999.0, sum(good_data), n_classes + 1)
+    complete_fractions = zeros(Float64, n_pixels, n_endmembers + 1)
 
-    if n_mc > 1
-        mixture_results_std =
-            fill(-9999.0, sum(good_data), size(library.class_valid_keys)[1] + 1)
-        complete_fractions_std = zeros(size(img_dat)[1], size(library.spectra)[1] + 1)
+    mixture_results_std::Union{Nothing, Matrix{Float64}} = if n_mc > 1
+        fill(-9999.0, sum(good_data), n_classes + 1)
     else
-        mixture_results_std = nothing
-        complete_fractions_std = nothing
+        nothing
     end
 
-    scale_data(img_dat, library.wavelengths[library.good_bands], normalization)
+    complete_fractions_std::Union{Nothing, Matrix{Float64}} = if n_mc > 1
+        zeros(Float64, n_pixels, n_endmembers + 1)
+    else
+        nothing
+    end
+
+    # Remove unused scale_data call (dead code)
+    # scale_data(img_dat, library.wavelengths[library.good_bands], normalization)
     img_dat = img_dat ./ refl_scale
 
     class_idx = prepare_combinations(library, combination_type)
@@ -513,13 +588,13 @@ function unmix_line(line::Int64, reflectance_file::String, mode::String,
     start_time = time()
 
     # Solve for each pixel
-    for _i in 1:size(img_dat)[1] # Pixel loop
-
-        lid = img_dat[_i:_i, :]
-        if isnothing(unc_dat)
-            lud = nothing
+    for _i in 1:n_pixels # Pixel loop
+        # Use views to avoid allocations
+        lid = @view img_dat[_i:_i, :]
+        lud::Union{Nothing, SubArray{Float64}} = if isnothing(unc_dat)
+            nothing
         else
-            lud = unc_dat[_i:_i, :]
+            @view unc_dat[_i:_i, :]
         end
 
         loc_mixture_res, loc_mixture_var, loc_cf_res, loc_cf_var =
@@ -532,11 +607,12 @@ function unmix_line(line::Int64, reflectance_file::String, mode::String,
         mixture_results[_i, :] = loc_mixture_res
 
         if n_mc > 1
-            complete_fractions_std[_i, :] = loc_cf_var
-            mixture_results_std[_i, :] = loc_mixture_var
+            # Type-safe indexing
+            complete_fractions_std[_i, :] = loc_cf_var::Vector{Float64}
+            mixture_results_std[_i, :] = loc_mixture_var::Vector{Float64}
         end
-
     end
+
     elapsed_time = time() - start_time
     if line != 1
         @info string("Line ", line, " run in ", round(elapsed_time, digits=4), " seconds")
