@@ -67,10 +67,10 @@ function opt_solve(A::Matrix{Float64}, b::Vector{Float64}, x0::Vector{Float64},
 end
 
 """
-    dolsq(A, b; method::String="default")
+    dolsq(A, b; method::String="default", lambda::Float64=0.0)
 
 Solve a least squares problem, finding the vector `x` that minimizes the residual
-||Ax - b||².
+||Ax - b||² + λ||x||².
 
 # Arguments
 - `A`: Coefficient matrix of size (m, n).
@@ -80,30 +80,42 @@ Available options are:
     - `"default"`: Solve the system using the backslash operator (`\`).
     - `"pinv"`: Use the pseudoinverse of `A` to compute the solution.
     - `"qr"`: Use QR decomposition to solve the least squares problem.
+- `lambda`: Optional Tikhonov regularization (Ridge) penalty parameter.
 
 # Returns
 - `x`: Vector of size (n,) that minimizes the least squares residual.
 """
-function dolsq(A, b; method::String="default")
+function dolsq(A, b; method::String="default", lambda::Float64=0.0)
+    # Augment the system to handle Tikhonov regularization natively 
+    # across all solver methods without manually computing normal equations
+    if lambda > 0.0
+        n = size(A, 2)
+        A_aug = vcat(A, sqrt(lambda) * I(n))
+        b_aug = vcat(b, zeros(n))
+    else
+        A_aug = A
+        b_aug = b
+    end
+
     if method == "default"
-        x = A \ b
+        x = A_aug \ b_aug
     elseif method == "pinv"
-        x = pinv(A) * b
+        x = pinv(A_aug) * b_aug
     elseif method == "qr"
-        #Q,R = qr(A)
-        #x = inv(R)*Q'*b
-        qrA = qr(A)
-        x = qrA \ b
+        #Q,R = qr(A_aug)
+        #x = inv(R)*Q'*b_aug
+        qrA = qr(A_aug)
+        x = qrA \ b_aug
     end
     return x
 end
 
 """
     bvls(A, b, x_lsq, lb, ub, tol::Float64, max_iter::Int64, verbose::Int64,
-         inverse_method::String)
+         inverse_method::String; lambda::Float64=0.0)
 
 Solve a bounded value least squares problem, finding the vector `x` subject to lower (`lb`)
-and upper (`ub`) bounds, that minimizes the residual ||Ax - b||².
+and upper (`ub`) bounds, that minimizes the residual ||Ax - b||² + λ||x||².
 
 - The function employs an iterative approach, adjusting the solution based on the specified
   bounds.
@@ -122,6 +134,7 @@ optimization variables.
 - `max_iter::Int64`: Maximum number of iterations allowed. If not specified, defaults to n.
 - `verbose::Int64`: Verbosity of output (0, 1, or 2).
 - `inverse_method::String`: Least squares solver method, see [`dolsq`](@ref) for options.
+- `lambda::Float64`: Tikhonov regularization parameter.
 
 # Returns
 - A tuple containing:
@@ -132,7 +145,7 @@ optimization variables.
 - Reference:  https://www.stat.berkeley.edu/~stark/Preprints/bvls.pdf
 """
 function bvls(A, b, x_lsq, lb, ub, tol::Float64, max_iter::Int64, verbose::Int64,
-    inverse_method::String)
+    inverse_method::String; lambda::Float64=0.0)
 
     n_iter = 0
     m, n = size(A)
@@ -153,9 +166,11 @@ function bvls(A, b, x_lsq, lb, ub, tol::Float64, max_iter::Int64, verbose::Int64
     free_set = (1:size(free_set)[1])[free_set.!=0]
 
     r = A * x - b
-    cost = 0.5 * dot(r, r)
+    # Update cost with Ridge penalty
+    cost = 0.5 * dot(r, r) + 0.5 * lambda * dot(x, x)
     initial_cost = cost
-    g = A' * r
+    # Update gradient with Ridge penalty
+    g = A' * r + lambda * x
 
     cost_change = nothing
     step_norm = nothing
@@ -171,7 +186,8 @@ function bvls(A, b, x_lsq, lb, ub, tol::Float64, max_iter::Int64, verbose::Int64
 
         A_free = A[:, free_set]
         b_free = b - A * (x .* active_set)
-        z = dolsq(A_free, b_free, method=inverse_method)
+        # Pass lambda down to the subproblem solver
+        z = dolsq(A_free, b_free, method=inverse_method, lambda=lambda)
 
         lbv = z .< lb[free_set]
         ubv = z .> ub[free_set]
@@ -196,10 +212,12 @@ function bvls(A, b, x_lsq, lb, ub, tol::Float64, max_iter::Int64, verbose::Int64
         x[ind] = z[.!v]
 
         r = A * x - b
-        cost_new = 0.5 * dot(r, r)
+        # Update cost with Ridge penalty
+        cost_new = 0.5 * dot(r, r) + 0.5 * lambda * dot(x, x)
         cost_change = cost - cost_new
         cost = cost_new
-        g = A' * r
+        # Update gradient with Ridge penalty
+        g = A' * r + lambda * x
         step_norm = sum((x[free_set] .- x_free_old) .^ 2)
 
         if any(v)
@@ -245,7 +263,8 @@ function bvls(A, b, x_lsq, lb, ub, tol::Float64, max_iter::Int64, verbose::Int64
 
             A_free = A[:, free_set]
             b_free = b - A * (x .* active_set)
-            z = dolsq(A_free, b_free, method=inverse_method)
+            # Pass lambda down to the subproblem solver
+            z = dolsq(A_free, b_free, method=inverse_method, lambda=lambda)
 
             lbv = (1:size(free_set)[1])[z.<lb_free]
             ubv = (1:size(free_set)[1])[z.>ub_free]
@@ -282,7 +301,8 @@ function bvls(A, b, x_lsq, lb, ub, tol::Float64, max_iter::Int64, verbose::Int64
         step_norm = sum((x_free .- x_free_old) .^ 2)
 
         r = A * x - b
-        cost_new = 0.5 * dot(r, r)
+        # Update cost with Ridge penalty
+        cost_new = 0.5 * dot(r, r) + 0.5 * lambda * dot(x, x)
         cost_change = cost - cost_new
 
         combo = tol * cost
@@ -291,7 +311,8 @@ function bvls(A, b, x_lsq, lb, ub, tol::Float64, max_iter::Int64, verbose::Int64
         end
         cost = cost_new
 
-        g = A' * r
+        # Update gradient with Ridge penalty
+        g = A' * r + lambda * x
         optimality = compute_kkt_optimality(g, on_bound)
     end #iteration
 

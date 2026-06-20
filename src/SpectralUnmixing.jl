@@ -384,7 +384,8 @@ function _unmix_pixel_kernel(library::SpectralLibrary, img_dat::Matrix{Float64},
                     G, d[:], x0,
                     view(lb_bounds, 1:n_vars),
                     view(ub_bounds, 1:n_vars),
-                    1e-3, 100, 1, inverse_method
+                    1e-3, 100, 1, inverse_method,
+                    lambda=1e-2
                 )
             elseif occursin("ldsqp", optimization)
                 res, cost = opt_solve(G, d[:], x0, zeros(length(x0)), ones(length(x0)))
@@ -430,7 +431,8 @@ function _unmix_pixel_kernel(library::SpectralLibrary, img_dat::Matrix{Float64},
                         G, d[:], x0,
                         view(lb_bounds, 1:n_vars),
                         view(ub_bounds, 1:n_vars),
-                        1e-3, 10, 1, inverse_method
+                        1e-3, 10, 1, inverse_method,
+                        lambda=1e-2
                     )
                     costs[_comb] = lc
                 elseif optimization == "ldsqp"
