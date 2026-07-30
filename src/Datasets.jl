@@ -280,7 +280,8 @@ process.
   - `good_data`: A boolean array indicating which pixels contain valid reflectance data.
 """
 function load_line(reflectance_file::String, reflectance_uncertainty_file::String,
-    line::Int64, good_bands::Array{Bool}, refl_nodata::Float64)
+    line::Int64, good_bands::Array{Bool},
+    refl_nodata::Float64)::Tuple{Union{Nothing, Matrix{Float64}}, Union{Nothing, Matrix{Float64}}, BitVector}
 
     reflectance_dataset = ArchGDAL.read(reflectance_file, alloweddrivers=["ENVI"])
     img_dat = convert(
@@ -292,17 +293,17 @@ function load_line(reflectance_file::String, reflectance_uncertainty_file::Strin
     img_dat = img_dat[good_data, :]
 
     if sum(good_data) >= 1
-        if reflectance_uncertainty_file != ""
-            unc_dat = convert(
+        unc_dat::Union{Nothing, Matrix{Float64}} = if reflectance_uncertainty_file != ""
+            unc_temp = convert(
                 Array{Float64},
                 ArchGDAL.readraster(
                     reflectance_uncertainty_file, alloweddrivers=["ENVI"]
                 )[:, line, :]
             )
-            unc_dat = unc_dat[:, good_bands]
-            unc_dat = unc_dat[good_data, :]
+            unc_temp = unc_temp[:, good_bands]
+            unc_temp[good_data, :]
         else
-            unc_dat = nothing
+            nothing
         end
     else
         return nothing, nothing, good_data
