@@ -28,6 +28,7 @@ save_data
 ## Unmixing and Simulation Functions
 ```@docs
 unmix_pixel
+_unmix_pixel_kernel
 simulate_pixel
 unmix_line
 unmix_and_write_line
@@ -61,6 +62,7 @@ compute_kkt_optimality
 
 # Utility Functions
 ```@docs
+ensure_2d
 wl_index
 nanargmax
 nanargmin
